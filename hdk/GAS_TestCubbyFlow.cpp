@@ -15,14 +15,21 @@
 #include <UT/UT_ThreadedAlgorithm.h>
 #include <UT/UT_SparseMatrix.h>
 
-#include <CUDA_CubbyFlow/Core/Solver/Grid/GridSmokeSolver3.hpp>
 #include <CUDA_CubbyFlow/Core/Geometry/Box.hpp>
 #include <CUDA_CubbyFlow/Core/Geometry/Sphere.hpp>
-#include <CUDA_CubbyFlow/Core/Emitter/VolumeGridEmitter3.hpp>
-#include <CUDA_CubbyFlow/Core/Solver/Advection/CubicSemiLagrangian3.hpp>
 #include <CUDA_CubbyFlow/Core/Geometry/RigidBodyCollider.hpp>
+#include <CUDA_CubbyFlow/Core/Emitter/VolumeGridEmitter3.hpp>
+#include <CUDA_CubbyFlow/Core/Solver/Grid/GridSmokeSolver3.hpp>
+#include <CUDA_CubbyFlow/Core/Solver/Advection/CubicSemiLagrangian3.hpp>
+#include <CUDA_CubbyFlow/Core/Solver/Grid/GridBackwardEulerDiffusionSolver3.hpp>
+#include <CUDA_CubbyFlow/Core/Solver/Grid/GridFractionalSinglePhasePressureSolver3.hpp>
+#include <CUDA_CubbyFlow/Core/Solver/Grid/GridBoundaryConditionSolver3.hpp>
+#include <CUDA_CubbyFlow/Core/Utils/LevelSetUtils.hpp>
+#include <CUDA_CubbyFlow/Core/Array/ArrayUtils.hpp>
 
+#include "cubby.h"
 #include "Grid/CellCenteredScalarGrid.hpp"
+#include "Utils/Logging.hpp"
 
 #define ACTIVATE_GAS_GEOMETRY static PRM_Name GeometryName(GAS_NAME_GEOMETRY, SIM_GEOMETRY_DATANAME); static PRM_Default GeometryNameDefault(0, SIM_GEOMETRY_DATANAME); PRMs.emplace_back(PRM_STRING, 1, &GeometryName, &GeometryNameDefault);
 #define ACTIVATE_GAS_DENSITY static PRM_Name DensityName(GAS_NAME_DENSITY, "Density"); static PRM_Default DensityNameDefault(0, GAS_NAME_DENSITY); PRMs.emplace_back(PRM_STRING, 1, &DensityName, &DensityNameDefault);
@@ -63,8 +70,9 @@ const SIM_DopDescription* GAS_TestCubbyFlow::getDopDescription()
     ACTIVATE_GAS_COLLISION
     ACTIVATE_GAS_PRESSURE
     ACTIVATE_GAS_DIVERGENCE
-    PARAMETER_FLOAT(Diffusion, 0.01)
-    PARAMETER_FLOAT(ImpulseFactor, 0.1)
+    PARAMETER_FLOAT(BuoyancyDensity, -0.000625)
+    PARAMETER_FLOAT(BuoyancyTemperature, 5.0)
+    PARAMETER_FLOAT(Viscosity, 0.0)
     PRMs.emplace_back();
 
     static SIM_DopDescription DESC(GEN_NODE,
@@ -108,6 +116,133 @@ bool GAS_TestCubbyFlow::solveGasSubclass(SIM_Engine& engine, SIM_Object* obj, SI
         std::cout << "origin: " << origin.x << " " << origin.y << " " << origin.z << '\n';
         std::cout << "Data Created!" << '\n';
     }
+
+    static std::shared_ptr<CubbyFlow::CubicSemiLagrangian3> AdvectionSolver;
+    static std::shared_ptr<CubbyFlow::GridBackwardEulerDiffusionSolver3> DiffusionSolver;
+    static std::shared_ptr<CubbyFlow::GridFractionalSinglePhasePressureSolver3> PressureSolver;
+    static std::shared_ptr<CubbyFlow::GridBoundaryConditionSolver3> BoundaryConditionSolver;
+    if (!AdvectionSolver) AdvectionSolver = std::make_shared<CubbyFlow::CubicSemiLagrangian3>();
+    if (!DiffusionSolver) DiffusionSolver = std::make_shared<CubbyFlow::GridBackwardEulerDiffusionSolver3>();
+    if (!PressureSolver) PressureSolver = std::make_shared<CubbyFlow::GridFractionalSinglePhasePressureSolver3>();
+    if (!BoundaryConditionSolver) BoundaryConditionSolver = PressureSolver->SuggestedBoundaryConditionSolver();
+
+    CubbyFlow::ScalarGrid3Ptr D_Cubby = Data->AdvectableScalarDataAt(density_ID);
+    CubbyFlow::ScalarGrid3Ptr T_Cubby = Data->AdvectableScalarDataAt(temperature_ID);
+    CubbyFlow::FaceCenteredGrid3Ptr V_Cubby = Data->Velocity();
+    CubbyFlow::ScalarField3Ptr FluidSDF_Cubby = std::make_shared<CubbyFlow::ConstantScalarField3>(-std::numeric_limits<double>::max());
+    const auto depth = 5;
+
+
+    // Emit Source
+    CubbyFlow::EmitFromHoudiniSource(D_Cubby, S);
+    CubbyFlow::EmitFromHoudiniSource(T_Cubby, S);
+
+
+    CubbyFlow::Logging::Mute();
+    // Buoyancy Force
+    {
+        double tAmb = 0.0;
+        T_Cubby->ForEachCellIndex([&](size_t i, size_t j, size_t k) { tAmb += (*T_Cubby)(i, j, k); });
+        tAmb /= static_cast<double>(T_Cubby->Resolution().x * T_Cubby->Resolution().y * T_Cubby->Resolution().z);
+
+        CubbyFlow::ArrayView3<double> u = V_Cubby->UView();
+        CubbyFlow::ArrayView3<double> v = V_Cubby->VView();
+        CubbyFlow::ArrayView3<double> w = V_Cubby->WView();
+        auto uPos = V_Cubby->UPosition();
+        auto vPos = V_Cubby->VPosition();
+        auto wPos = V_Cubby->WPosition();
+
+        CubbyFlow::Vector3D up{0, 1, 0};
+        if (std::abs(up.x) > std::numeric_limits<double>::epsilon())
+        {
+            V_Cubby->ParallelForEachUIndex([&](const CubbyFlow::Vector3UZ& idx)
+            {
+                const CubbyFlow::Vector3D pt = uPos(idx);
+                const double fBuoy =
+                    getBuoyancyDensity() * D_Cubby->Sample(pt) +
+                    getBuoyancyTemperature() * (T_Cubby->Sample(pt) - tAmb);
+                u(idx) += timestep * fBuoy * up.x;
+            });
+        }
+
+        if (std::abs(up.y) > std::numeric_limits<double>::epsilon())
+        {
+            V_Cubby->ParallelForEachVIndex([&](const CubbyFlow::Vector3UZ& idx)
+            {
+                const CubbyFlow::Vector3D pt = vPos(idx);
+                const double fBuoy =
+                    getBuoyancyDensity() * D_Cubby->Sample(pt) +
+                    getBuoyancyTemperature() * (T_Cubby->Sample(pt) - tAmb);
+                v(idx) += timestep * fBuoy * up.y;
+            });
+        }
+
+        if (std::abs(up.z) > std::numeric_limits<double>::epsilon())
+        {
+            V_Cubby->ParallelForEachWIndex([&](const CubbyFlow::Vector3UZ& idx)
+            {
+                const CubbyFlow::Vector3D pt = wPos(idx);
+                const double fBuoy =
+                    getBuoyancyDensity() * D_Cubby->Sample(pt) +
+                    getBuoyancyTemperature() * (T_Cubby->Sample(pt) - tAmb);
+                w(idx) += timestep * fBuoy * up.z;
+            });
+        }
+
+        BoundaryConditionSolver->ConstrainVelocity(V_Cubby.get(), depth);
+    }
+
+
+    // Viscosity
+    {
+        const std::shared_ptr<CubbyFlow::FaceCenteredGrid3> vel0 = std::dynamic_pointer_cast<CubbyFlow::FaceCenteredGrid3>(V_Cubby->Clone());
+        DiffusionSolver->Solve(*vel0, getViscosity(), timestep, V_Cubby.get(), *BoundaryConditionSolver->GetColliderSDF(), *FluidSDF_Cubby);
+        BoundaryConditionSolver->ConstrainVelocity(V_Cubby.get(), depth);
+    }
+
+
+    // Pressure
+    {
+        const std::shared_ptr<CubbyFlow::FaceCenteredGrid3> vel0 = std::dynamic_pointer_cast<CubbyFlow::FaceCenteredGrid3>(V_Cubby->Clone());
+        PressureSolver->Solve(*vel0, timestep, V_Cubby.get(), *BoundaryConditionSolver->GetColliderSDF(), *BoundaryConditionSolver->GetColliderVelocityField(), *FluidSDF_Cubby, false);
+        BoundaryConditionSolver->ConstrainVelocity(V_Cubby.get(), depth);
+    }
+
+
+    // Advection
+    {
+        size_t n = Data->NumberOfAdvectableScalarData();
+        for (size_t i = 0; i < n; ++i)
+        {
+            CubbyFlow::ScalarGrid3Ptr grid = Data->AdvectableScalarDataAt(i);
+            std::shared_ptr<CubbyFlow::ScalarGrid3> grid0 = grid->Clone();
+
+            AdvectionSolver->Advect(*grid0, *V_Cubby, timestep, grid.get(), *BoundaryConditionSolver->GetColliderSDF());
+
+            CubbyFlow::Array3<char> marker(grid->DataSize());
+            CubbyFlow::GridDataPositionFunc<3> pos = grid->DataPosition();
+            ParallelForEachIndex(marker.Size(), [&](size_t i, size_t j, size_t k)
+            {
+                if (CubbyFlow::IsInsideSDF(BoundaryConditionSolver->GetColliderSDF()->Sample(pos(i, j, k))))
+                {
+                    marker(i, j, k) = 0;
+                } else
+                {
+                    marker(i, j, k) = 1;
+                }
+            });
+            CubbyFlow::ExtrapolateToRegion(grid->DataView(), marker, depth, grid->DataView());
+        }
+
+        n = Data->NumberOfAdvectableVectorData();
+        const std::shared_ptr<CubbyFlow::FaceCenteredGrid3> vel0 = std::dynamic_pointer_cast<CubbyFlow::FaceCenteredGrid3>(V_Cubby->Clone());
+        AdvectionSolver->Advect(*vel0, *vel0, timestep, V_Cubby.get(), *BoundaryConditionSolver->GetColliderSDF());
+        BoundaryConditionSolver->ConstrainVelocity(V_Cubby.get(), depth);
+    }
+
+    CubbyFlow::WriteHoudiniField(D, D_Cubby);
+    CubbyFlow::WriteHoudiniField(T, T_Cubby);
+    CubbyFlow::WriteHoudiniField(V, V_Cubby);
 
     return true;
 }

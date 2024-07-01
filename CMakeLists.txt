@@ -24,6 +24,8 @@ add_library(
         hdk/Entrance.cpp
         hdk/GAS_TestCubbyFlow.cpp
         hdk/GAS_TestCubbyFlow.h
+        hdk/cubby.cpp
+        hdk/cubby.h
 )
 target_link_libraries(
         SIM_TEST

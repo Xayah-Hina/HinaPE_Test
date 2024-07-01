@@ -17,6 +17,10 @@ public:
     std::shared_ptr<CubbyFlow::GridSystemData3> Data;
     size_t density_ID, temperature_ID;
 
+    GETSET_DATA_FUNCS_F("BuoyancyDensity", BuoyancyDensity)
+	GETSET_DATA_FUNCS_F("BuoyancyTemperature", BuoyancyTemperature)
+	GETSET_DATA_FUNCS_F("Viscosity", Viscosity)
+
 protected:
     explicit GAS_TestCubbyFlow(const SIM_DataFactory* factory);
     void initializeSubclass() final;

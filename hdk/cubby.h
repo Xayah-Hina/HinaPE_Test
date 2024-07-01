@@ -9,8 +9,6 @@
 #include <CUDA_CubbyFlow/Core/Grid/FaceCenteredGrid.hpp>
 #include <CUDA_CubbyFlow/Core/Particle/ParticleSystemData.hpp>
 
-#include "Grid/FaceCenteredGrid.hpp"
-
 namespace CubbyFlow
 {
 void EmitFromHoudiniSource(std::shared_ptr<ScalarGrid3> &TARGET, const SIM_ScalarField *SOURCE);

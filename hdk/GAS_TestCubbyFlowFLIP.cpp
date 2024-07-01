@@ -120,15 +120,14 @@ bool GAS_TestCubbyFlowFLIP::solveGasSubclass(SIM_Engine& engine, SIM_Object* obj
         CubbyFlow::LoadHoudiniParticles(Particles, gdp);
     }
 
-    static std::shared_ptr<CubbyFlow::CubicSemiLagrangian3> AdvectionSolver;
-    static std::shared_ptr<CubbyFlow::GridBackwardEulerDiffusionSolver3> DiffusionSolver;
-    static std::shared_ptr<CubbyFlow::GridFractionalSinglePhasePressureSolver3> PressureSolver;
-    static std::shared_ptr<CubbyFlow::GridBoundaryConditionSolver3> BoundaryConditionSolver;
+    static std::shared_ptr<CubbyFlow::CubicSemiLagrangian3> AdvectionSolver = nullptr;
+    static std::shared_ptr<CubbyFlow::GridBackwardEulerDiffusionSolver3> DiffusionSolver = nullptr;
+    static std::shared_ptr<CubbyFlow::GridFractionalSinglePhasePressureSolver3> PressureSolver = nullptr;
+    static std::shared_ptr<CubbyFlow::GridBoundaryConditionSolver3> BoundaryConditionSolver = nullptr;
     if (!AdvectionSolver) AdvectionSolver = std::make_shared<CubbyFlow::CubicSemiLagrangian3>();
     if (!DiffusionSolver) DiffusionSolver = std::make_shared<CubbyFlow::GridBackwardEulerDiffusionSolver3>();
     if (!PressureSolver) PressureSolver = std::make_shared<CubbyFlow::GridFractionalSinglePhasePressureSolver3>();
     if (!BoundaryConditionSolver) BoundaryConditionSolver = PressureSolver->SuggestedBoundaryConditionSolver();
-
 
     CubbyFlow::ScalarGrid3Ptr FluidSDF_Cubby = Data->AdvectableScalarDataAt(sdf_ID);
     CubbyFlow::FaceCenteredGrid3Ptr V_Cubby = Data->Velocity();
@@ -143,8 +142,7 @@ bool GAS_TestCubbyFlowFLIP::solveGasSubclass(SIM_Engine& engine, SIM_Object* obj
     const size_t N = Particles->NumberOfParticles();
     const auto depth = getExtrapolateDepth();
 
-    POINT_ATTRIBUTE_V3(v);
-    POINT_ATTRIBUTE_V3(a);
+    BoundaryConditionSolver->ConstrainVelocity(V_Cubby.get(), depth); // Update All First
 
     // P2G
     {

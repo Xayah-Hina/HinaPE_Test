@@ -324,7 +324,7 @@ void GridFractionalBoundaryConditionSolver3::OnColliderUpdated(
     }
     else
     {
-        m_colliderSDF->Fill(std::numeric_limits<double>::max());
+        m_colliderSDF->Fill(100000);
 
         m_colliderVel =
             CustomVectorField3::Builder{}

@@ -118,10 +118,10 @@ bool GAS_TestCubbyFlowSmoke::solveGasSubclass(SIM_Engine& engine, SIM_Object* ob
         temperature_ID = Data->AddAdvectableScalarData(std::make_shared<CubbyFlow::CellCenteredScalarGrid3::Builder>(), 0.0);
     }
 
-    static std::shared_ptr<CubbyFlow::CubicSemiLagrangian3> AdvectionSolver;
-    static std::shared_ptr<CubbyFlow::GridBackwardEulerDiffusionSolver3> DiffusionSolver;
-    static std::shared_ptr<CubbyFlow::GridFractionalSinglePhasePressureSolver3> PressureSolver;
-    static std::shared_ptr<CubbyFlow::GridBoundaryConditionSolver3> BoundaryConditionSolver;
+    static std::shared_ptr<CubbyFlow::CubicSemiLagrangian3> AdvectionSolver = nullptr;
+    static std::shared_ptr<CubbyFlow::GridBackwardEulerDiffusionSolver3> DiffusionSolver = nullptr;
+    static std::shared_ptr<CubbyFlow::GridFractionalSinglePhasePressureSolver3> PressureSolver = nullptr;
+    static std::shared_ptr<CubbyFlow::GridBoundaryConditionSolver3> BoundaryConditionSolver = nullptr;
     if (!AdvectionSolver) AdvectionSolver = std::make_shared<CubbyFlow::CubicSemiLagrangian3>();
     if (!DiffusionSolver) DiffusionSolver = std::make_shared<CubbyFlow::GridBackwardEulerDiffusionSolver3>();
     if (!PressureSolver) PressureSolver = std::make_shared<CubbyFlow::GridFractionalSinglePhasePressureSolver3>();

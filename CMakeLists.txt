@@ -22,8 +22,10 @@ add_library(
         SIM_TEST
         SHARED
         hdk/Entrance.cpp
-        hdk/GAS_TestCubbyFlow.cpp
-        hdk/GAS_TestCubbyFlow.h
+        hdk/GAS_TestCubbyFlowSmoke.cpp
+        hdk/GAS_TestCubbyFlowSmoke.h
+        hdk/GAS_TestCubbyFlowFLIP.cpp
+        hdk/GAS_TestCubbyFlowFLIP.h
         hdk/cubby.cpp
         hdk/cubby.h
 )

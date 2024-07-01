@@ -1,0 +1,8 @@
+.DS_Store
+.idea
+cmake-build-*
+backup
+sim
+geo
+tga
+render*

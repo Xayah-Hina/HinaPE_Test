@@ -8,16 +8,12 @@
 #include <SIM/SIM_ScalarField.h>
 #include <SIM/SIM_FieldUtils.h>
 #include <GAS/GAS_ProjectNonDivergent.h>
-#include <GAS/GAS_Diffuse.h>
 #include <PRM/PRM_Template.h>
 #include <PRM/PRM_Default.h>
 #include <GU/GU_Detail.h>
-#include <UT/UT_ThreadedAlgorithm.h>
 #include <UT/UT_SparseMatrix.h>
 
-#include <CUDA_CubbyFlow/Core/Geometry/Box.hpp>
 #include <CUDA_CubbyFlow/Core/Geometry/Sphere.hpp>
-#include <CUDA_CubbyFlow/Core/Geometry/RigidBodyCollider.hpp>
 #include <CUDA_CubbyFlow/Core/Emitter/VolumeGridEmitter3.hpp>
 #include <CUDA_CubbyFlow/Core/Solver/Grid/GridSmokeSolver3.hpp>
 #include <CUDA_CubbyFlow/Core/Solver/Advection/CubicSemiLagrangian3.hpp>
@@ -30,6 +26,9 @@
 
 #include "cubby.h"
 #include "Utils/Logging.hpp"
+
+#include <PY/PY_Python.h>
+#include <PY/PY_CPythonAPI.h>
 
 #define ACTIVATE_GAS_GEOMETRY static PRM_Name GeometryName(GAS_NAME_GEOMETRY, SIM_GEOMETRY_DATANAME); static PRM_Default GeometryNameDefault(0, SIM_GEOMETRY_DATANAME); PRMs.emplace_back(PRM_STRING, 1, &GeometryName, &GeometryNameDefault);
 #define ACTIVATE_GAS_DENSITY static PRM_Name DensityName(GAS_NAME_DENSITY, "Density"); static PRM_Default DensityNameDefault(0, GAS_NAME_DENSITY); PRMs.emplace_back(PRM_STRING, 1, &DensityName, &DensityNameDefault);
@@ -213,6 +212,44 @@ bool GAS_TestCubbyFlowSmoke::solveGasSubclass(SIM_Engine& engine, SIM_Object* ob
     CubbyFlow::WriteHoudiniField(D, D_Cubby);
     CubbyFlow::WriteHoudiniField(T, T_Cubby);
     CubbyFlow::WriteHoudiniField(V, V_Cubby);
+
+    UT_WorkBuffer expr;
+    PY_Result result;
+
+    expr.sprintf(R"(
+from phi.torch.flow import *
+
+velocity = StaggeredGrid((0, 0, 0), 0, x=50, y=50, z=50, bounds=Box(x=1, y=1, z=1))  # or CenteredGrid(...)
+smoke = CenteredGrid(0, ZERO_GRADIENT, x=50, y=50, z=50, bounds=Box(x=1, y=1, z=1))
+INFLOW = 0.5 * resample(Sphere(x=0.5, y=0.5, z=0.5, radius=0.1), to=smoke, soft=True)
+pressure = None
+
+
+@jit_compile  # Only for PyTorch, TensorFlow and Jax
+def step(v, s, p, dt=1.):
+    s = advect.mac_cormack(s, v, dt) + INFLOW
+    buoyancy = resample(s * (0, 0, 0.1), to=v)
+    v = advect.semi_lagrangian(v, v, dt) + buoyancy * dt
+    v, p = fluid.make_incompressible(v, (), Solve('auto', 1e-5, x0=p))
+    return v, s, p
+
+
+velocity, smoke, pressure = step(velocity, smoke, pressure)
+d_n = smoke.data.native('x,y,z').cpu().numpy().flatten()
+d_n_no_zero = d_n[d_n != 0]
+)");
+    PYrunPythonStatementsAndExpectNoErrors(expr.buffer());
+    expr.sprintf("d_n_no_zero.tolist()\n");
+    result = PYrunPythonExpressionAndExpectNoErrors(expr.buffer(), PY_Result::DOUBLE_ARRAY);
+    if (result.myResultType != PY_Result::DOUBLE_ARRAY)
+    {
+        printf("Error: %s\n", result.myErrValue.buffer());
+        return false;
+    }
+
+    printf("Python Result:");
+    for (double i : result.myDoubleArray) printf(" %f", i);
+    printf("\n");
 
     return true;
 }

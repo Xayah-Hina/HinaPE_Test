@@ -35,8 +35,6 @@ void GAS_TestPhiFlow::initializeSubclass()
 
     UT_WorkBuffer expr;
     expr.sprintf(R"(
-import sys, os
-sys.stdout = open(os.devnull, 'w')
 from phi.torch.flow import *
 velocity = StaggeredGrid((0, 0, 0), 0, x=50, y=50, z=50, bounds=Box(x=1, y=1, z=1))  # or CenteredGrid(...)
 smoke = CenteredGrid(0, ZERO_GRADIENT, x=50, y=50, z=50, bounds=Box(x=1, y=1, z=1))

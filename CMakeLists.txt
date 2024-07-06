@@ -26,6 +26,8 @@ add_library(
         hdk/GAS_TestCubbyFlowSmoke.h
         hdk/GAS_TestCubbyFlowFLIP.cpp
         hdk/GAS_TestCubbyFlowFLIP.h
+        hdk/GAS_TestPhiFlow.cpp
+        hdk/GAS_TestPhiFlow.h
         hdk/cubby.cpp
         hdk/cubby.h
 )

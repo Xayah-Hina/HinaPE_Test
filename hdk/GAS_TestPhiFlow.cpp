@@ -36,9 +36,10 @@ void GAS_TestPhiFlow::initializeSubclass()
     UT_WorkBuffer expr;
     expr.sprintf(R"(
 from phi.torch.flow import *
-velocity = StaggeredGrid((0, 0, 0), 0, x=50, y=50, z=50, bounds=Box(x=1, y=1, z=1))  # or CenteredGrid(...)
-smoke = CenteredGrid(0, ZERO_GRADIENT, x=50, y=50, z=50, bounds=Box(x=1, y=1, z=1))
-INFLOW = 0.5 * resample(Sphere(x=0.5, y=0.5, z=0.5, radius=0.1), to=smoke, soft=True)
+res = (100, 100, 100)
+velocity = StaggeredGrid((0, 0, 0), 0, x=res[0], y=res[1], z=res[2], bounds=Box(x=1, y=1, z=1))
+smoke = CenteredGrid(0, ZERO_GRADIENT, x=res[0], y=res[1], z=res[2], bounds=Box(x=1, y=1, z=1))
+INFLOW = resample(Sphere(x=0.5, y=0.5, z=0.5, radius=0.1), to=smoke, soft=True)
 pressure = None
 
 @jit_compile  # Only for PyTorch, TensorFlow and Jax

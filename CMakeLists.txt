@@ -28,6 +28,8 @@ add_library(
         hdk/GAS_TestCubbyFlowFLIP.h
         hdk/GAS_TestPhiFlow.cpp
         hdk/GAS_TestPhiFlow.h
+        hdk/GAS_ReadRefImage.cpp
+        hdk/GAS_ReadRefImage.h
         hdk/cubby.cpp
         hdk/cubby.h
 )

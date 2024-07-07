@@ -3,10 +3,12 @@
 #include "GAS_TestCubbyFlowSmoke.h"
 #include "GAS_TestCubbyFlowFLIP.h"
 #include "GAS_TestPhiFlow.h"
+#include "GAS_ReadRefImage.h"
 
 void initializeSIM(void *)
 {
 	IMPLEMENT_DATAFACTORY(GAS_TestCubbyFlowSmoke)
 	IMPLEMENT_DATAFACTORY(GAS_TestCubbyFlowFLIP)
 	IMPLEMENT_DATAFACTORY(GAS_TestPhiFlow)
+	IMPLEMENT_DATAFACTORY(GAS_ReadRefImage)
 }

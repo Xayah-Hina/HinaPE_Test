@@ -33,24 +33,24 @@ void GAS_TestPhiFlow::initializeSubclass()
 {
     GAS_SubSolver::initializeSubclass();
 
-    UT_WorkBuffer expr;
-    expr.sprintf(R"(
-from phi.torch.flow import *
-res = (100, 100, 100)
-velocity = StaggeredGrid((0, 0, 0), 0, x=res[0], y=res[1], z=res[2], bounds=Box(x=1, y=1, z=1))
-smoke = CenteredGrid(0, ZERO_GRADIENT, x=res[0], y=res[1], z=res[2], bounds=Box(x=1, y=1, z=1))
-INFLOW = resample(Sphere(x=0.5, y=0.5, z=0.5, radius=0.1), to=smoke, soft=True)
-pressure = None
-
-@jit_compile  # Only for PyTorch, TensorFlow and Jax
-def step(v, s, p, dt=1.):
-    s = advect.mac_cormack(s, v, dt) + INFLOW
-    buoyancy = resample(s * (0, 0, 0.1), to=v)
-    v = advect.semi_lagrangian(v, v, dt) + buoyancy * dt
-    v, p = fluid.make_incompressible(v, (), Solve('auto', 1e-5, x0=p))
-    return v, s, p
-)");
-    PYrunPythonStatementsAndExpectNoErrors(expr.buffer());
+//     UT_WorkBuffer expr;
+//     expr.sprintf(R"(
+// from phi.torch.flow import *
+// res = (100, 100, 100)
+// velocity = StaggeredGrid((0, 0, 0), 0, x=res[0], y=res[1], z=res[2], bounds=Box(x=1, y=1, z=1))
+// smoke = CenteredGrid(0, ZERO_GRADIENT, x=res[0], y=res[1], z=res[2], bounds=Box(x=1, y=1, z=1))
+// INFLOW = resample(Sphere(x=0.5, y=0.5, z=0.5, radius=0.1), to=smoke, soft=True)
+// pressure = None
+//
+// @jit_compile  # Only for PyTorch, TensorFlow and Jax
+// def step(v, s, p, dt=1.):
+//     s = advect.mac_cormack(s, v, dt) + INFLOW
+//     buoyancy = resample(s * (0, 0, 0.1), to=v)
+//     v = advect.semi_lagrangian(v, v, dt) + buoyancy * dt
+//     v, p = fluid.make_incompressible(v, (), Solve('auto', 1e-5, x0=p))
+//     return v, s, p
+// )");
+//     PYrunPythonStatementsAndExpectNoErrors(expr.buffer());
 }
 
 void GAS_TestPhiFlow::makeEqualSubclass(const SIM_Data* source)

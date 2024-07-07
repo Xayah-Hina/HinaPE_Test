@@ -16,6 +16,10 @@
 #include <UT/UT_ThreadedAlgorithm.h>
 #include <UT/UT_SparseMatrix.h>
 
+#include <IMG/IMG_File.h>
+#include <IMG/IMG_Stat.h>
+#include <PXL/PXL_Raster.h>
+
 #define GAS_NAME_REFERENCE		"reference"
 #define ACTIVATE_GAS_REFERENCE static PRM_Name ReferenceName(GAS_NAME_REFERENCE, "Reference"); static PRM_Default ReferenceNameDefault(0, GAS_NAME_REFERENCE); PRMs.emplace_back(PRM_STRING, 1, &ReferenceName, &ReferenceNameDefault);
 
@@ -67,6 +71,21 @@ bool GAS_ReadRefImage::solveGasSubclass(SIM_Engine& engine, SIM_Object* obj, SIM
     }
 
     auto image = getRefImage();
+
+    auto imageFile = IMG_File::open(image.c_str());
+    IMG_Stat imgStat = imageFile->getStat();
+
+    int width = imgStat.getXres();
+    int height = imgStat.getYres();
+    int channels = imgStat.getComponentCount();
+    // printf("width: %d, height: %d, channels: %d\n", width, height, channels);
+
+    UT_Array<UT_UniquePtr<PXL_Raster>> images;
+    bool success = imageFile->readImages(images);
+
+    const auto* color = (const float*)images[0]->getPixel(0, 0);
+
+    printf("color: %f, %f, %f\n", color[0], color[1], color[2]);
 
     return true;
 }
